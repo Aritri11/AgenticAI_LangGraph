@@ -1,17 +1,18 @@
 from langgraph.graph import StateGraph, START, END
 from typing import TypedDict, Annotated, Literal
-from langchain_openai import ChatOpenAI
+from langchain_ollama import ChatOllama
 from pydantic import BaseModel, Field
 from patsy import state
-from dotenv import load_dotenv
 import operator
 from langchain_core.messages import SystemMessage, HumanMessage, BaseMessage
 from langgraph.graph.message import add_messages
 from langgraph.checkpoint.memory import MemorySaver
 
 
-load_dotenv()
-llm=ChatOpenAI()
+llm = ChatOllama(
+    model="llama3.2:1b",
+    temperature=0
+)
 
 class ChatState(TypedDict):
     messages: Annotated[list[BaseMessage],add_messages]
@@ -26,6 +27,7 @@ def chat_node(state: ChatState):
     #response store state
     return {'messages':[response]}
 
+#concept of 'checkpointer' helps to bring persistence
 checkpointer = MemorySaver()
 graph=StateGraph(ChatState)
 
@@ -41,7 +43,7 @@ chatbot=graph.compile(checkpointer=checkpointer)
 # Image(workflow.get_graph().draw_mermaid_png())
 
 #looping strategy:
-thread_id='l'
+thread_id='1'
 while True:
     user_message=input("Type here: ")
 
