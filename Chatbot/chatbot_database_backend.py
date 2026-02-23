@@ -1,13 +1,10 @@
 from langgraph.graph import StateGraph, START, END
 from typing import TypedDict, Annotated, Literal
 from langchain_ollama import ChatOllama
-from pydantic import BaseModel, Field
-from patsy import state
-import operator
 from langchain_core.messages import SystemMessage, HumanMessage, BaseMessage
 from langgraph.graph.message import add_messages
-from langgraph.checkpoint.memory import InMemorySaver
-
+from langgraph.checkpoint.sqlite import SqliteSaver
+import sqlite3
 
 llm = ChatOllama(
     model="llama3.2:1b",
@@ -16,6 +13,7 @@ llm = ChatOllama(
 
 class ChatState(TypedDict):
     messages: Annotated[list[BaseMessage],add_messages]
+
 
 def chat_node(state: ChatState):
     #take user query from state
@@ -27,8 +25,12 @@ def chat_node(state: ChatState):
     #response store state
     return {'messages':[response]}
 
-#concept of 'checkpointer' helps to bring persistence
-checkpointer = InMemorySaver()
+#Adding a sqlite connection after creating the database
+conn=sqlite3.connect(database='chatbot.db', check_same_thread=False)
+#Checkpointer
+checkpointer=SqliteSaver(conn=conn)
+
+
 graph=StateGraph(ChatState)
 
 graph.add_node('chat_node', chat_node)
@@ -38,21 +40,12 @@ graph.add_edge('chat_node', END)
 
 chatbot=graph.compile(checkpointer=checkpointer)
 
-# #to see the workflow
-# from IPython.display import Image
-# Image(workflow.get_graph().draw_mermaid_png())
+#To extract unique no of threads that is used in the frontend code to retain the threads that were previously present
+def retrieve_all_threads():
+    all_threads=set()
+    for checkpoint in checkpointer.list(None): #the checkpointer.list func gives all the details of each checkpointer
+        all_threads.add(checkpoint.config['configurable']['thread_id'])
+    return list(all_threads)
 
-#looping strategy:
-thread_id='1'
-while True:
-    user_message=input("Type here: ")
-
-    print('User:',user_message)
-
-    if user_message.strip().lower() in ['exit', 'quit,''bye']:
-        break
-    config={'configurable': {'thread_id':thread_id}}
-    response=chatbot.invoke({'messages': [HumanMessage(content=user_message)]},config=config)
-    print('AI: ', response['messages'][-1].content)
 
 
